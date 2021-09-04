@@ -505,9 +505,13 @@ declare_class!(
         }
 
         #[sel(applicationWillEnterForeground:)]
-        fn will_enter_foreground(&self, _application: &UIApplication) {}
+        fn will_enter_foreground(&self, _application: &UIApplication) {
+            unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Foreground)) }
+        }
         #[sel(applicationDidEnterBackground:)]
-        fn did_enter_background(&self, _application: &UIApplication) {}
+        fn did_enter_background(&self, _application: &UIApplication) {
+            unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Background)) }
+        }
 
         #[sel(applicationWillTerminate:)]
         fn will_terminate(&self, application: &UIApplication) {
