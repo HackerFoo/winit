@@ -1,4 +1,7 @@
 use std::collections::HashMap;
+use std::ffi::CStr;
+use std::path::Path;
+use std::os::raw::c_char;
 
 use objc::{
     declare::ClassDecl,
@@ -592,6 +595,25 @@ pub fn create_delegate_class() {
         }
     }
 
+    extern "C" fn open_url(_: &Object, _: Sel, _: id, url: id, _: id) -> BOOL {
+        unsafe {
+            let string_obj: *mut Object = msg_send![url, path];
+            if !string_obj.is_null() {
+                let utf8_ptr: *const c_char = msg_send![string_obj, cStringUsingEncoding: 4]; // UTF8
+                if !utf8_ptr.is_null() {
+                    if let Ok(s) = CStr::from_ptr(utf8_ptr).to_str() {
+                        let path = Path::new(s);
+                        if path.exists() {
+                            app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::OpenFile(path.to_path_buf())));
+                            return YES;
+                        }
+                    }
+                }
+            }
+        }
+        NO
+    }
+
     let ui_responder = class!(UIResponder);
     let mut decl =
         ClassDecl::new("AppDelegate", ui_responder).expect("Failed to declare class `AppDelegate`");
@@ -622,6 +644,11 @@ pub fn create_delegate_class() {
         decl.add_method(
             sel!(applicationWillTerminate:),
             will_terminate as extern "C" fn(&Object, Sel, id),
+        );
+
+        decl.add_method(
+            sel!(application:openURL:options:),
+            open_url as extern "C" fn(&Object, Sel, id, id, id) -> BOOL,
         );
 
         decl.register();

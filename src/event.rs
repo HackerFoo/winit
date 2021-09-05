@@ -183,6 +183,9 @@ pub enum Event<'a, T: 'static> {
     /// Emitted when the application has entered the background.
     Background,
 
+    /// Open file at the given path
+    OpenFile(PathBuf),
+
     /// Emitted when all of the event loop's input events have been processed and redraw processing
     /// is about to begin.
     ///
@@ -249,7 +252,8 @@ impl<T: Clone> Clone for Event<'static, T> {
             Suspended => Suspended,
             Resumed => Resumed,
             Foreground => Foreground,
-            Background => Background
+            Background => Background,
+            OpenFile(path) => OpenFile(path.clone())
         }
     }
 }
@@ -269,7 +273,8 @@ impl<'a, T> Event<'a, T> {
             Suspended => Ok(Suspended),
             Resumed => Ok(Resumed),
             Foreground => Ok(Foreground),
-            Background => Ok(Background)
+            Background => Ok(Background),
+            OpenFile(path) => Ok(OpenFile(path))
         }
     }
 
@@ -291,7 +296,8 @@ impl<'a, T> Event<'a, T> {
             Suspended => Some(Suspended),
             Resumed => Some(Resumed),
             Foreground => Some(Foreground),
-            Background => Some(Background)
+            Background => Some(Background),
+            OpenFile(path) => Some(OpenFile(path))
         }
     }
 }
