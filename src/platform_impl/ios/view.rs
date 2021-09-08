@@ -542,15 +542,19 @@ declare_class!(
         #[sel(application:openURL:options:)]
         fn open_url(&self, _application: &UIApplication, url: id, _: id) -> bool {
             unsafe {
-                let string_obj: *mut Object = msg_send![url, path];
-                if !string_obj.is_null() {
-                    let utf8_ptr: *const c_char = msg_send![string_obj, cStringUsingEncoding: 4]; // UTF8
-                    if !utf8_ptr.is_null() {
-                        if let Ok(s) = CStr::from_ptr(utf8_ptr).to_str() {
-                            let path = Path::new(s);
-                            if path.exists() {
-                                app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::OpenFile(path.to_path_buf())));
-                                return true;
+                // *** leaks resources, should call stopAccessingSecurityScopedResource
+                let can_access = msg_send![url, startAccessingSecurityScopedResource];
+                if can_access {
+                    let string_obj: *mut Object = msg_send![url, path];
+                    if !string_obj.is_null() {
+                        let utf8_ptr: *const c_char = msg_send![string_obj, cStringUsingEncoding: 4]; // UTF8
+                        if !utf8_ptr.is_null() {
+                            if let Ok(s) = CStr::from_ptr(utf8_ptr).to_str() {
+                                let path = Path::new(s);
+                                if path.exists() {
+                                    app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::OpenFile(path.to_path_buf())));
+                                    return true;
+                                }
                             }
                         }
                     }
