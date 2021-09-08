@@ -597,15 +597,19 @@ pub fn create_delegate_class() {
 
     extern "C" fn open_url(_: &Object, _: Sel, _: id, url: id, _: id) -> BOOL {
         unsafe {
-            let string_obj: *mut Object = msg_send![url, path];
-            if !string_obj.is_null() {
-                let utf8_ptr: *const c_char = msg_send![string_obj, cStringUsingEncoding: 4]; // UTF8
-                if !utf8_ptr.is_null() {
-                    if let Ok(s) = CStr::from_ptr(utf8_ptr).to_str() {
-                        let path = Path::new(s);
-                        if path.exists() {
-                            app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::OpenFile(path.to_path_buf())));
-                            return YES;
+            // *** leaks resources, should call stopAccessingSecurityScopedResource
+            let can_access: BOOL = msg_send![url, startAccessingSecurityScopedResource];
+            if can_access == YES {
+                let string_obj: *mut Object = msg_send![url, path];
+                if !string_obj.is_null() {
+                    let utf8_ptr: *const c_char = msg_send![string_obj, cStringUsingEncoding: 4]; // UTF8
+                    if !utf8_ptr.is_null() {
+                        if let Ok(s) = CStr::from_ptr(utf8_ptr).to_str() {
+                            let path = Path::new(s);
+                            if path.exists() {
+                                app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::OpenFile(path.to_path_buf())));
+                                return YES;
+                            }
                         }
                     }
                 }
