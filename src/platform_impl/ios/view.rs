@@ -597,9 +597,10 @@ pub fn create_delegate_class() {
 
     extern "C" fn open_url(_: &Object, _: Sel, _: id, url: id, _: id) -> BOOL {
         unsafe {
-            // *** leaks resources, should call stopAccessingSecurityScopedResource
-            let can_access: BOOL = msg_send![url, startAccessingSecurityScopedResource];
-            if can_access == YES {
+            let is_file_url: BOOL = msg_send![url, isFileURL];
+            if is_file_url == YES {
+                // *** leaks resources, should call stopAccessingSecurityScopedResource
+                let _started_access: BOOL = msg_send![url, startAccessingSecurityScopedResource];
                 let string_obj: *mut Object = msg_send![url, path];
                 if !string_obj.is_null() {
                     let utf8_ptr: *const c_char = msg_send![string_obj, cStringUsingEncoding: 4]; // UTF8
