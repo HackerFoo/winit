@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ffi::CStr;
-use std::path::Path;
 use std::os::raw::c_char;
+use std::path::Path;
 
 use objc::{
     declare::ClassDecl,
@@ -571,6 +571,10 @@ pub fn create_delegate_class() {
         unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Background)) }
     }
 
+    extern "C" fn did_receive_memory_warning(_: &Object, _: Sel, _: id) {
+        unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::MemoryWarning)) }
+    }
+
     extern "C" fn will_terminate(_: &Object, _: Sel, _: id) {
         unsafe {
             let app: id = msg_send![class!(UIApplication), sharedApplication];
@@ -608,7 +612,9 @@ pub fn create_delegate_class() {
                         if let Ok(s) = CStr::from_ptr(utf8_ptr).to_str() {
                             let path = Path::new(s);
                             if path.exists() {
-                                app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::OpenFile(path.to_path_buf())));
+                                app_state::handle_nonuser_event(EventWrapper::StaticEvent(
+                                    Event::OpenFile(path.to_path_buf()),
+                                ));
                                 return YES;
                             }
                         }
@@ -644,6 +650,10 @@ pub fn create_delegate_class() {
         decl.add_method(
             sel!(applicationDidEnterBackground:),
             did_enter_background as extern "C" fn(&Object, Sel, id),
+        );
+        decl.add_method(
+            sel!(applicationDidReceiveMemoryWarning:),
+            did_receive_memory_warning as extern "C" fn(&Object, Sel, id),
         );
 
         decl.add_method(
