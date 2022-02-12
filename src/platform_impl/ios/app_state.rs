@@ -21,8 +21,8 @@ use crate::{
         ffi::{
             id, kCFRunLoopCommonModes, CFAbsoluteTimeGetCurrent, CFRelease, CFRunLoopAddTimer,
             CFRunLoopGetMain, CFRunLoopRef, CFRunLoopTimerCreate, CFRunLoopTimerInvalidate,
-            CFRunLoopTimerRef, CFRunLoopTimerSetNextFireDate, CGRect, CGSize, NSInteger,
-            NSOperatingSystemVersion, NSUInteger,
+            CFRunLoopTimerRef, CFRunLoopTimerSetNextFireDate, CFRunLoopTimerSetTolerance, CGRect,
+            CGSize, NSInteger, NSOperatingSystemVersion, NSUInteger,
         },
     },
     window::WindowId as RootWindowId,
@@ -912,12 +912,13 @@ impl EventLoopWaker {
             let timer = CFRunLoopTimerCreate(
                 ptr::null_mut(),
                 std::f64::MAX,
-                0.000_000_1,
+                0.008,
                 0,
                 0,
                 wakeup_main_loop,
                 ptr::null_mut(),
             );
+            CFRunLoopTimerSetTolerance(timer, 0.004); // ***
             CFRunLoopAddTimer(rl, timer, kCFRunLoopCommonModes);
 
             EventLoopWaker { timer }

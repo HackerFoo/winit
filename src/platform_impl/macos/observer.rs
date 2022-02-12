@@ -44,6 +44,7 @@ extern "C" {
         context: *mut CFRunLoopTimerContext,
     ) -> CFRunLoopTimerRef;
     pub fn CFRunLoopAddTimer(rl: CFRunLoopRef, timer: CFRunLoopTimerRef, mode: CFRunLoopMode);
+    pub fn CFRunLoopTimerSetTolerance(timer: CFRunLoopTimerRef, tolerance: CFTimeInterval);
     pub fn CFRunLoopTimerSetNextFireDate(timer: CFRunLoopTimerRef, fireDate: CFAbsoluteTime);
     pub fn CFRunLoopTimerInvalidate(time: CFRunLoopTimerRef);
 
@@ -271,6 +272,7 @@ impl Default for EventLoopWaker {
                 wakeup_main_loop,
                 ptr::null_mut(),
             );
+            CFRunLoopTimerSetTolerance(timer, 0.004); // ***
             CFRunLoopAddTimer(CFRunLoopGetMain(), timer, kCFRunLoopCommonModes);
             EventLoopWaker { timer }
         }
