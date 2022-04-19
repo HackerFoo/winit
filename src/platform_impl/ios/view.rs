@@ -5,7 +5,7 @@ use std::path::Path;
 
 use objc::{
     declare::ClassDecl,
-    runtime::{Class, Object, Sel, BOOL, NO, YES},
+    runtime::{objc_release, objc_retain, Class, Object, Sel, BOOL, NO, YES},
 };
 
 use crate::{
@@ -548,9 +548,10 @@ pub(crate) unsafe fn create_window(
 }
 
 pub fn create_delegate_class() {
-    extern "C" fn did_finish_launching(_: &mut Object, _: Sel, _: id, _: id) -> BOOL {
+    extern "C" fn did_finish_launching(_self: &mut Object, _: Sel, _: id, _: id) -> BOOL {
         unsafe {
             app_state::did_finish_launching();
+            _self.set_ivar::<id>("lastURL", std::ptr::null_mut())
         }
         YES
     }
@@ -567,8 +568,18 @@ pub fn create_delegate_class() {
         unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Foreground)) }
     }
 
-    extern "C" fn did_enter_background(_: &Object, _: Sel, _: id) {
-        unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Background)) }
+    extern "C" fn did_enter_background(_self: &mut Object, _: Sel, _: id) {
+        unsafe {
+            app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Background));
+
+            // release URLs to avoid leaks
+            let last_url: &mut id = _self.get_mut_ivar("lastURL");
+            if !last_url.is_null() {
+                let () = msg_send![*last_url, stopAccessingSecurityScopedResource];
+                objc_release(*last_url);
+                *last_url = std::ptr::null_mut();
+            }
+        }
     }
 
     extern "C" fn did_receive_memory_warning(_: &Object, _: Sel, _: id) {
@@ -599,12 +610,17 @@ pub fn create_delegate_class() {
         }
     }
 
-    extern "C" fn open_url(_: &Object, _: Sel, _: id, url: id, _: id) -> BOOL {
+    extern "C" fn open_url(_self: &mut Object, _: Sel, _: id, url: id, _: id) -> BOOL {
         unsafe {
             let is_file_url: BOOL = msg_send![url, isFileURL];
             if is_file_url == YES {
-                // *** leaks resources, should call stopAccessingSecurityScopedResource
+                let last_url: &mut id = _self.get_mut_ivar("lastURL");
+                if !last_url.is_null() {
+                    let () = msg_send![*last_url, stopAccessingSecurityScopedResource];
+                    objc_release(*last_url);
+                }
                 let _started_access: BOOL = msg_send![url, startAccessingSecurityScopedResource];
+                *last_url = objc_retain(url);
                 let string_obj: *mut Object = msg_send![url, path];
                 if !string_obj.is_null() {
                     let utf8_ptr: *const c_char = msg_send![string_obj, cStringUsingEncoding: 4]; // UTF8
@@ -649,7 +665,7 @@ pub fn create_delegate_class() {
         );
         decl.add_method(
             sel!(applicationDidEnterBackground:),
-            did_enter_background as extern "C" fn(&Object, Sel, id),
+            did_enter_background as extern "C" fn(&mut Object, Sel, id),
         );
         decl.add_method(
             sel!(applicationDidReceiveMemoryWarning:),
@@ -663,8 +679,10 @@ pub fn create_delegate_class() {
 
         decl.add_method(
             sel!(application:openURL:options:),
-            open_url as extern "C" fn(&Object, Sel, id, id, id) -> BOOL,
+            open_url as extern "C" fn(&mut Object, Sel, id, id, id) -> BOOL,
         );
+
+        decl.add_ivar::<id>("lastURL");
 
         decl.register();
     }
