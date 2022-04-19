@@ -1,4 +1,5 @@
 #![allow(clippy::unnecessary_cast)]
+use objc2::runtime::{objc_retain, objc_release};
 use std::ffi::CStr;
 use std::path::Path;
 use std::os::raw::c_char;
@@ -481,7 +482,9 @@ impl WinitUIWindow {
 }
 
 declare_class!(
-    pub struct WinitApplicationDelegate {}
+    pub struct WinitApplicationDelegate {
+        lastURL: *mut id
+    }
 
     unsafe impl ClassType for WinitApplicationDelegate {
         type Super = NSObject;
@@ -493,6 +496,7 @@ declare_class!(
         fn did_finish_launching(&self, _application: &UIApplication, _: *mut NSObject) -> bool {
             unsafe {
                 app_state::did_finish_launching();
+                self.lastURL = std::ptr::null_mut();
             }
             true
         }
@@ -512,8 +516,17 @@ declare_class!(
             unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Foreground)) }
         }
         #[sel(applicationDidEnterBackground:)]
-        fn did_enter_background(&self, _application: &UIApplication) {
-            unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Background)) }
+        fn did_enter_background(&mut self, _application: &UIApplication) {
+            unsafe {
+                app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Background));
+
+                // release URLs to avoid leaks
+                if !self.lastURL.is_null() {
+                    let () = msg_send![*self.lastURL, stopAccessingSecurityScopedResource];
+                    objc_release(*self.lastURL);
+                    self.lastURL = std::ptr::null_mut();
+                }
+            }
         }
         #[sel(applicationDidReceiveMemoryWarning:)]
         fn did_receive_memory_warning(&self, _: id) {
@@ -544,12 +557,16 @@ declare_class!(
         }
 
         #[sel(application:openURL:options:)]
-        fn open_url(&self, _application: &UIApplication, url: id, _: id) -> bool {
+        fn open_url(&mut self, _application: &UIApplication, url: id, _: id) -> bool {
             unsafe {
                 let is_file_url: BOOL = msg_send![url, isFileURL];
                 if is_file_url == YES {
-                    // *** leaks resources, should call stopAccessingSecurityScopedResource
+                    if !self.lastURL.is_null() {
+                        let () = msg_send![*self.lastURL, stopAccessingSecurityScopedResource];
+                        objc_release(*self.lastURL);
+                    }
                     let _started_access: bool = msg_send![url, startAccessingSecurityScopedResource];
+                    self.lastURL = objc_retain(url);
                     let string_obj: *mut Object = msg_send![url, path];
                     if !string_obj.is_null() {
                         let utf8_ptr: *const c_char = msg_send![string_obj, cStringUsingEncoding: 4]; // UTF8
