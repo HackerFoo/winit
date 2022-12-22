@@ -542,9 +542,10 @@ declare_class!(
         #[sel(application:openURL:options:)]
         fn open_url(&self, _application: &UIApplication, url: id, _: id) -> bool {
             unsafe {
-                // *** leaks resources, should call stopAccessingSecurityScopedResource
-                let can_access = msg_send![url, startAccessingSecurityScopedResource];
-                if can_access {
+                let is_file_url: BOOL = msg_send![url, isFileURL];
+                if is_file_url == YES {
+                    // *** leaks resources, should call stopAccessingSecurityScopedResource
+                    let _started_access: bool = msg_send![url, startAccessingSecurityScopedResource];
                     let string_obj: *mut Object = msg_send![url, path];
                     if !string_obj.is_null() {
                         let utf8_ptr: *const c_char = msg_send![string_obj, cStringUsingEncoding: 4]; // UTF8
