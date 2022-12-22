@@ -515,6 +515,10 @@ declare_class!(
         fn did_enter_background(&self, _application: &UIApplication) {
             unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Background)) }
         }
+        #[sel(applicationDidReceiveMemoryWarning:)]
+        fn did_receive_memory_warning(&self, _: id) {
+            unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::MemoryWarning)) }
+        }
 
         #[sel(applicationWillTerminate:)]
         fn will_terminate(&self, application: &UIApplication) {

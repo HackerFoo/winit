@@ -183,6 +183,9 @@ pub enum Event<'a, T: 'static> {
     /// Emitted when the application has entered the background.
     Background,
 
+    /// Emitted when the application should free memory.
+    MemoryWarning,
+
     /// Open file at the given path
     OpenFile(PathBuf),
 
@@ -262,7 +265,8 @@ impl<T: Clone> Clone for Event<'static, T> {
             Resumed => Resumed,
             Foreground => Foreground,
             Background => Background,
-            OpenFile(path) => OpenFile(path.clone())
+            MemoryWarning => MemoryWarning,
+            OpenFile(path) => OpenFile(path.clone()),
         }
     }
 }
@@ -283,7 +287,8 @@ impl<'a, T> Event<'a, T> {
             Resumed => Ok(Resumed),
             Foreground => Ok(Foreground),
             Background => Ok(Background),
-            OpenFile(path) => Ok(OpenFile(path))
+            MemoryWarning => Ok(MemoryWarning),
+            OpenFile(path) => Ok(OpenFile(path)),
         }
     }
 
@@ -306,7 +311,8 @@ impl<'a, T> Event<'a, T> {
             Resumed => Some(Resumed),
             Foreground => Some(Foreground),
             Background => Some(Background),
-            OpenFile(path) => Some(OpenFile(path))
+            MemoryWarning => Some(MemoryWarning),
+            OpenFile(path) => Some(OpenFile(path)),
         }
     }
 }
