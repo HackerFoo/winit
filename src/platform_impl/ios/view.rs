@@ -1,5 +1,5 @@
 #![allow(clippy::unnecessary_cast)]
-use objc2::runtime::{objc_retain, objc_release};
+use objc2::{runtime::Object, rc::{Id, Shared}, declare::{Ivar, IvarDrop}};
 use std::ffi::CStr;
 use std::path::Path;
 use std::os::raw::c_char;
@@ -483,7 +483,7 @@ impl WinitUIWindow {
 
 declare_class!(
     pub struct WinitApplicationDelegate {
-        lastURL: *mut id
+        lastURL: IvarDrop<Id<Object, Shared>>,
     }
 
     unsafe impl ClassType for WinitApplicationDelegate {
@@ -493,10 +493,10 @@ declare_class!(
     // UIApplicationDelegate protocol
     unsafe impl WinitApplicationDelegate {
         #[sel(application:didFinishLaunchingWithOptions:)]
-        fn did_finish_launching(&self, _application: &UIApplication, _: *mut NSObject) -> bool {
+        fn did_finish_launching(&mut self, _application: &UIApplication, _: *mut NSObject) -> bool {
             unsafe {
                 app_state::did_finish_launching();
-                self.lastURL = std::ptr::null_mut();
+                self.lastURL = Default::default();
             }
             true
         }
@@ -522,9 +522,9 @@ declare_class!(
 
                 // release URLs to avoid leaks
                 if !self.lastURL.is_null() {
-                    let () = msg_send![*self.lastURL, stopAccessingSecurityScopedResource];
-                    objc_release(*self.lastURL);
-                    self.lastURL = std::ptr::null_mut();
+                    let () = msg_send![self.lastURL.as_mut_ptr(), stopAccessingSecurityScopedResource];
+                    self.lastURL.release();
+                    Ivar::write(&mut self.lastURL, Id::new(std::ptr::null_mut()));
                 }
             }
         }
@@ -559,14 +559,15 @@ declare_class!(
         #[sel(application:openURL:options:)]
         fn open_url(&mut self, _application: &UIApplication, url: id, _: id) -> bool {
             unsafe {
-                let is_file_url: BOOL = msg_send![url, isFileURL];
-                if is_file_url == YES {
+                let is_file_url: bool = msg_send![url, isFileURL];
+                if is_file_url {
                     if !self.lastURL.is_null() {
-                        let () = msg_send![*self.lastURL, stopAccessingSecurityScopedResource];
-                        objc_release(*self.lastURL);
+                        let () = msg_send![self.lastURL.as_mut_ptr(), stopAccessingSecurityScopedResource];
+                        self.lastURL.autorelease();
+                        Ivar::write(&mut self.lastURL, Id::new(std::ptr::null_mut()));
                     }
                     let _started_access: bool = msg_send![url, startAccessingSecurityScopedResource];
-                    self.lastURL = objc_retain(url);
+                    Ivar::write(&mut self.lastURL, url.retain().unwrap());
                     let string_obj: *mut Object = msg_send![url, path];
                     if !string_obj.is_null() {
                         let utf8_ptr: *const c_char = msg_send![string_obj, cStringUsingEncoding: 4]; // UTF8
