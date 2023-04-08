@@ -1,11 +1,10 @@
 #![allow(clippy::unnecessary_cast)]
-use objc2::{runtime::Object, rc::{Id, Shared}, declare::{Ivar, IvarDrop}};
+use objc2::{runtime::Object, rc::{Id, Shared, autoreleasepool}, declare::{Ivar, IvarDrop}, foundation::NSString};
 use std::ffi::CStr;
 use std::path::Path;
 use std::os::raw::c_char;
 
 use objc2::foundation::{CGFloat, CGRect, MainThreadMarker, NSObject, NSSet};
-use objc2::rc::{Id, Shared};
 use objc2::runtime::Class;
 use objc2::{declare_class, extern_methods, msg_send, msg_send_id, ClassType};
 
@@ -483,7 +482,7 @@ impl WinitUIWindow {
 
 declare_class!(
     pub struct WinitApplicationDelegate {
-        lastURL: IvarDrop<Id<Object, Shared>>,
+        lastURL: IvarDrop<Option<Id<NSObject, Shared>>>,
     }
 
     unsafe impl ClassType for WinitApplicationDelegate {
@@ -496,7 +495,7 @@ declare_class!(
         fn did_finish_launching(&mut self, _application: &UIApplication, _: *mut NSObject) -> bool {
             unsafe {
                 app_state::did_finish_launching();
-                self.lastURL = Default::default();
+                *self.lastURL = None;
             }
             true
         }
@@ -521,15 +520,17 @@ declare_class!(
                 app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Background));
 
                 // release URLs to avoid leaks
+                /*
                 if !self.lastURL.is_null() {
                     let () = msg_send![self.lastURL.as_mut_ptr(), stopAccessingSecurityScopedResource];
                     self.lastURL.release();
                     Ivar::write(&mut self.lastURL, Id::new(std::ptr::null_mut()));
                 }
+                */
             }
         }
         #[sel(applicationDidReceiveMemoryWarning:)]
-        fn did_receive_memory_warning(&self, _: id) {
+        fn did_receive_memory_warning(&self, _application: &UIApplication) {
             unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::MemoryWarning)) }
         }
 
@@ -557,33 +558,32 @@ declare_class!(
         }
 
         #[sel(application:openURL:options:)]
-        fn open_url(&mut self, _application: &UIApplication, url: id, _: id) -> bool {
+        fn open_url(&mut self, _application: &UIApplication, url: *mut NSObject, _: *mut NSObject) -> bool {
             unsafe {
                 let is_file_url: bool = msg_send![url, isFileURL];
                 if is_file_url {
-                    if !self.lastURL.is_null() {
-                        let () = msg_send![self.lastURL.as_mut_ptr(), stopAccessingSecurityScopedResource];
-                        self.lastURL.autorelease();
-                        Ivar::write(&mut self.lastURL, Id::new(std::ptr::null_mut()));
-                    }
-                    let _started_access: bool = msg_send![url, startAccessingSecurityScopedResource];
-                    Ivar::write(&mut self.lastURL, url.retain().unwrap());
-                    let string_obj: *mut Object = msg_send![url, path];
-                    if !string_obj.is_null() {
-                        let utf8_ptr: *const c_char = msg_send![string_obj, cStringUsingEncoding: 4]; // UTF8
-                        if !utf8_ptr.is_null() {
-                            if let Ok(s) = CStr::from_ptr(utf8_ptr).to_str() {
-                                let path = Path::new(s);
+                    autoreleasepool(|pool| {
+                        if let Some(lastURL) = &*self.lastURL {
+                            let () = msg_send![lastURL, stopAccessingSecurityScopedResource];
+                        }
+                        *self.lastURL = Id::new(url);
+                        if let Some(url) = &*self.lastURL {
+                            let _started_access: bool = msg_send![url, startAccessingSecurityScopedResource];
+                            let string_obj: Option<Id<NSString, Shared>> = msg_send_id![url, path];
+                            if let Some(string_obj) = string_obj {
+                                let path = Path::new(string_obj.as_str(pool));
                                 if path.exists() {
                                     app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::OpenFile(path.to_path_buf())));
                                     return true;
                                 }
                             }
                         }
-                    }
+                        false
+                    })
+                } else {
+                    false
                 }
             }
-            false
         }
     }
 );

@@ -29,7 +29,7 @@ use crate::{
     event_loop::ControlFlow,
     platform_impl::platform::{
         event_loop::{EventHandler, EventProxy, EventWrapper, Never},
-        ffi::{CFRunLoopTimerSetTolerance, NSOperatingSystemVersion},
+        ffi::NSOperatingSystemVersion,
     },
     window::WindowId as RootWindowId,
 };
@@ -871,7 +871,7 @@ impl EventLoopWaker {
                 wakeup_main_loop,
                 ptr::null_mut(),
             );
-            CFRunLoopTimerSetTolerance(timer, 0.004); // ***
+            //CFRunLoopTimerSetTolerance(timer, 0.004); // ***
             CFRunLoopAddTimer(rl, timer, kCFRunLoopCommonModes);
 
             EventLoopWaker { timer }
