@@ -393,9 +393,6 @@ impl AppState {
 
         let new = self.control_flow;
         match (old, new) {
-            (ControlFlow::Poll, ControlFlow::Poll) => self.set_state(AppStateImpl::PollFinished {
-                waiting_event_handler,
-            }),
             (ControlFlow::Wait, ControlFlow::Wait) => {
                 let start = Instant::now();
                 self.set_state(AppStateImpl::Waiting {
@@ -868,12 +865,13 @@ impl EventLoopWaker {
             let timer = CFRunLoopTimerCreate(
                 ptr::null_mut(),
                 std::f64::MAX,
-                0.000_000_1,
+                0.008,
                 0,
                 0,
                 wakeup_main_loop,
                 ptr::null_mut(),
             );
+            //CFRunLoopTimerSetTolerance(timer, 0.004); // ***
             CFRunLoopAddTimer(rl, timer, kCFRunLoopCommonModes);
 
             EventLoopWaker { timer }

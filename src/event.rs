@@ -177,6 +177,18 @@ pub enum Event<'a, T: 'static> {
     /// [`Suspended`]: Self::Suspended
     Resumed,
 
+    /// Emitted when the application will enter the foreground.
+    Foreground,
+
+    /// Emitted when the application has entered the background.
+    Background,
+
+    /// Emitted when the application should free memory.
+    MemoryWarning,
+
+    /// Open file at the given path
+    OpenFile(PathBuf),
+
     /// Emitted when all of the event loop's input events have been processed and redraw processing
     /// is about to begin.
     ///
@@ -251,6 +263,10 @@ impl<T: Clone> Clone for Event<'static, T> {
             LoopDestroyed => LoopDestroyed,
             Suspended => Suspended,
             Resumed => Resumed,
+            Foreground => Foreground,
+            Background => Background,
+            MemoryWarning => MemoryWarning,
+            OpenFile(path) => OpenFile(path.clone()),
         }
     }
 }
@@ -269,6 +285,10 @@ impl<'a, T> Event<'a, T> {
             LoopDestroyed => Ok(LoopDestroyed),
             Suspended => Ok(Suspended),
             Resumed => Ok(Resumed),
+            Foreground => Ok(Foreground),
+            Background => Ok(Background),
+            MemoryWarning => Ok(MemoryWarning),
+            OpenFile(path) => Ok(OpenFile(path)),
         }
     }
 
@@ -289,6 +309,10 @@ impl<'a, T> Event<'a, T> {
             LoopDestroyed => Some(LoopDestroyed),
             Suspended => Some(Suspended),
             Resumed => Some(Resumed),
+            Foreground => Some(Foreground),
+            Background => Some(Background),
+            MemoryWarning => Some(MemoryWarning),
+            OpenFile(path) => Some(OpenFile(path)),
         }
     }
 }
