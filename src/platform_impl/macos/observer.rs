@@ -16,7 +16,7 @@ use core_foundation::base::{CFIndex, CFOptionFlags, CFRelease};
 use core_foundation::date::CFAbsoluteTimeGetCurrent;
 use core_foundation::runloop::{
     kCFRunLoopAfterWaiting, kCFRunLoopBeforeWaiting, kCFRunLoopCommonModes, kCFRunLoopExit,
-    CFRunLoopActivity, CFRunLoopAddObserver, CFRunLoopAddTimer, CFRunLoopTimerSetTolerance, CFRunLoopGetMain,
+    CFRunLoopActivity, CFRunLoopAddObserver, CFRunLoopAddTimer, CFRunLoopGetMain,
     CFRunLoopObserverCallBack, CFRunLoopObserverContext, CFRunLoopObserverCreate,
     CFRunLoopObserverRef, CFRunLoopRef, CFRunLoopTimerCreate, CFRunLoopTimerInvalidate,
     CFRunLoopTimerRef, CFRunLoopTimerSetNextFireDate,
@@ -168,7 +168,6 @@ impl Default for EventLoopWaker {
                 wakeup_main_loop,
                 ptr::null_mut(),
             );
-            CFRunLoopTimerSetTolerance(timer, 0.004); // ***
             CFRunLoopAddTimer(CFRunLoopGetMain(), timer, kCFRunLoopCommonModes);
             EventLoopWaker { timer }
         }

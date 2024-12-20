@@ -1,10 +1,7 @@
 #![allow(clippy::unnecessary_cast)]
-use objc2::{runtime::Object, rc::{Id, Shared, autoreleasepool}, declare::{Ivar, IvarDrop}, foundation::NSString};
-use std::ffi::CStr;
-use std::path::Path;
-use std::os::raw::c_char;
 
 use objc2::foundation::{CGFloat, CGRect, MainThreadMarker, NSObject, NSSet};
+use objc2::rc::{Id, Shared};
 use objc2::runtime::Class;
 use objc2::{declare_class, extern_methods, msg_send, msg_send_id, ClassType};
 
@@ -481,9 +478,7 @@ impl WinitUIWindow {
 }
 
 declare_class!(
-    pub struct WinitApplicationDelegate {
-        lastURL: IvarDrop<Option<Id<NSObject, Shared>>>,
-    }
+    pub struct WinitApplicationDelegate {}
 
     unsafe impl ClassType for WinitApplicationDelegate {
         type Super = NSObject;
@@ -492,10 +487,9 @@ declare_class!(
     // UIApplicationDelegate protocol
     unsafe impl WinitApplicationDelegate {
         #[sel(application:didFinishLaunchingWithOptions:)]
-        fn did_finish_launching(&mut self, _application: &UIApplication, _: *mut NSObject) -> bool {
+        fn did_finish_launching(&self, _application: &UIApplication, _: *mut NSObject) -> bool {
             unsafe {
                 app_state::did_finish_launching();
-                *self.lastURL = None;
             }
             true
         }
@@ -511,28 +505,9 @@ declare_class!(
         }
 
         #[sel(applicationWillEnterForeground:)]
-        fn will_enter_foreground(&self, _application: &UIApplication) {
-            unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Foreground)) }
-        }
+        fn will_enter_foreground(&self, _application: &UIApplication) {}
         #[sel(applicationDidEnterBackground:)]
-        fn did_enter_background(&mut self, _application: &UIApplication) {
-            unsafe {
-                app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::Background));
-
-                // release URLs to avoid leaks
-                /*
-                if !self.lastURL.is_null() {
-                    let () = msg_send![self.lastURL.as_mut_ptr(), stopAccessingSecurityScopedResource];
-                    self.lastURL.release();
-                    Ivar::write(&mut self.lastURL, Id::new(std::ptr::null_mut()));
-                }
-                */
-            }
-        }
-        #[sel(applicationDidReceiveMemoryWarning:)]
-        fn did_receive_memory_warning(&self, _application: &UIApplication) {
-            unsafe { app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::MemoryWarning)) }
-        }
+        fn did_enter_background(&self, _application: &UIApplication) {}
 
         #[sel(applicationWillTerminate:)]
         fn will_terminate(&self, application: &UIApplication) {
@@ -554,35 +529,6 @@ declare_class!(
             unsafe {
                 app_state::handle_nonuser_events(events);
                 app_state::terminated();
-            }
-        }
-
-        #[sel(application:openURL:options:)]
-        fn open_url(&mut self, _application: &UIApplication, url: *mut NSObject, _: *mut NSObject) -> bool {
-            unsafe {
-                let is_file_url: bool = msg_send![url, isFileURL];
-                if is_file_url {
-                    autoreleasepool(|pool| {
-                        if let Some(lastURL) = &*self.lastURL {
-                            let () = msg_send![lastURL, stopAccessingSecurityScopedResource];
-                        }
-                        *self.lastURL = Id::new(url);
-                        if let Some(url) = &*self.lastURL {
-                            let _started_access: bool = msg_send![url, startAccessingSecurityScopedResource];
-                            let string_obj: Option<Id<NSString, Shared>> = msg_send_id![url, path];
-                            if let Some(string_obj) = string_obj {
-                                let path = Path::new(string_obj.as_str(pool));
-                                if path.exists() {
-                                    app_state::handle_nonuser_event(EventWrapper::StaticEvent(Event::OpenFile(path.to_path_buf())));
-                                    return true;
-                                }
-                            }
-                        }
-                        false
-                    })
-                } else {
-                    false
-                }
             }
         }
     }
