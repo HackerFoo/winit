@@ -1,6 +1,5 @@
 //! End user application handling.
 
-use std::path::PathBuf;
 use crate::event::{DeviceEvent, DeviceId, StartCause, WindowEvent};
 use crate::event_loop::ActiveEventLoop;
 use crate::window::WindowId;
@@ -223,12 +222,6 @@ pub trait ApplicationHandler<T: 'static = ()> {
     fn memory_warning(&mut self, event_loop: &ActiveEventLoop) {
         let _ = event_loop;
     }
-
-    /// TODO add description
-    fn open_file(&mut self, event_loop: &ActiveEventLoop, file: PathBuf) {
-        let _ = event_loop;
-        let _ = file;
-    }
 }
 
 impl<A: ?Sized + ApplicationHandler<T>, T: 'static> ApplicationHandler<T> for &mut A {
@@ -286,11 +279,6 @@ impl<A: ?Sized + ApplicationHandler<T>, T: 'static> ApplicationHandler<T> for &m
     fn memory_warning(&mut self, event_loop: &ActiveEventLoop) {
         (**self).memory_warning(event_loop);
     }
-
-    #[inline]
-    fn open_file(&mut self, event_loop: &ActiveEventLoop, file: PathBuf) {
-        (**self).open_file(event_loop, file);
-    }
 }
 
 impl<A: ?Sized + ApplicationHandler<T>, T: 'static> ApplicationHandler<T> for Box<A> {
@@ -347,10 +335,5 @@ impl<A: ?Sized + ApplicationHandler<T>, T: 'static> ApplicationHandler<T> for Bo
     #[inline]
     fn memory_warning(&mut self, event_loop: &ActiveEventLoop) {
         (**self).memory_warning(event_loop);
-    }
-
-    #[inline]
-    fn open_file(&mut self, event_loop: &ActiveEventLoop, file: PathBuf) {
-        (**self).open_file(event_loop, file);
     }
 }
