@@ -1,8 +1,4 @@
-use std::{
-    ffi::CStr,
-    path::Path,
-    os::raw::c_char,
-};
+use std::path::Path;
 
 use objc2::{declare_class, mutability, ClassType, DeclaredClass, msg_send, msg_send_id, rc::{Allocated, Retained, autoreleasepool}};
 use objc2_foundation::{MainThreadMarker, NSObject, NSString};
@@ -13,7 +9,7 @@ use crate::event::Event;
 
 #[derive(Clone)]
 pub struct AppDelegateIvars {
-    lastUrl: Option<Retained<NSObject>>,
+    last_url: Option<Retained<NSObject>>,
 }
 
 declare_class!(
@@ -34,7 +30,7 @@ declare_class!(
         #[method_id(init)]
         fn init(this: Allocated<Self>) -> Option<Retained<Self>> {
             let this = this.set_ivars(AppDelegateIvars {
-                lastUrl: None,
+                last_url: None,
             });
             unsafe { msg_send_id![super(this), init] }
         }
@@ -42,7 +38,7 @@ declare_class!(
         #[method(application:didFinishLaunchingWithOptions:)]
         fn did_finish_launching(&mut self, _application: &UIApplication, _: *mut NSObject) -> bool {
             app_state::did_finish_launching(MainThreadMarker::new().unwrap());
-            self.ivars_mut().lastUrl = None;
+            self.ivars_mut().last_url = None;
             true
         }
 
@@ -85,11 +81,11 @@ declare_class!(
                 let is_file_url: bool = msg_send![url, isFileURL];
                 if is_file_url {
                     autoreleasepool(|pool| {
-                        if let Some(lastUrl) = &self.ivars().lastUrl {
-                            let () = msg_send![lastUrl, stopAccessingSecurityScopedResource];
+                        if let Some(last_url) = &self.ivars().last_url {
+                            let () = msg_send![last_url, stopAccessingSecurityScopedResource];
                         }
-                        self.ivars_mut().lastUrl = Retained::retain(url);
-                        if let Some(url) = &self.ivars().lastUrl {
+                        self.ivars_mut().last_url = Retained::retain(url);
+                        if let Some(url) = &self.ivars().last_url {
                             let _started_access: bool = msg_send![url, startAccessingSecurityScopedResource];
                             let string_obj: Option<Retained<NSString>> = msg_send_id![url, path];
                             if let Some(string_obj) = string_obj {
