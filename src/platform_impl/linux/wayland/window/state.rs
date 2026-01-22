@@ -31,7 +31,7 @@ use sctk::subcompositor::SubcompositorState;
 use wayland_protocols_plasma::blur::client::org_kde_kwin_blur::OrgKdeKwinBlur;
 
 use crate::cursor::CustomCursor as RootCustomCursor;
-use crate::dpi::{LogicalPosition, LogicalSize, PhysicalSize, Size};
+use crate::dpi::{LogicalPosition, LogicalSize, PhysicalPosition, PhysicalSize, Size};
 use crate::error::{ExternalError, NotSupportedError};
 use crate::platform_impl::wayland::logical_to_physical_rounded;
 use crate::platform_impl::wayland::types::cursor::{CustomCursor, SelectedCursor};
@@ -222,9 +222,9 @@ impl WindowState {
     }
 
     /// Apply closure on the given pointer.
-    fn apply_on_pointer<F: Fn(&ThemedPointer<WinitPointerData>, &WinitPointerData)>(
+    fn apply_on_pointer<F: FnMut(&ThemedPointer<WinitPointerData>, &WinitPointerData)>(
         &self,
-        callback: F,
+        mut callback: F,
     ) {
         self.pointers.iter().filter_map(Weak::upgrade).for_each(|pointer| {
             let data = pointer.pointer().winit_data();
@@ -726,17 +726,26 @@ impl WindowState {
     }
 
     fn apply_custom_cursor(&self, cursor: &CustomCursor) {
-        self.apply_on_pointer(|pointer, _| {
+        self.apply_on_pointer(|pointer, data| {
             let surface = pointer.surface();
 
-            let scale = surface.data::<SurfaceData>().unwrap().surface_data().scale_factor();
+            let scale = if let Some(viewport) = data.viewport() {
+                let scale = self.scale_factor();
+                let size = PhysicalSize::new(cursor.w, cursor.h).to_logical(scale);
+                viewport.set_destination(size.width, size.height);
+                scale
+            } else {
+                let scale = surface.data::<SurfaceData>().unwrap().surface_data().scale_factor();
+                surface.set_buffer_scale(scale);
+                scale as f64
+            };
 
-            surface.set_buffer_scale(scale);
             surface.attach(Some(cursor.buffer.wl_buffer()), 0, 0);
             if surface.version() >= 4 {
                 surface.damage_buffer(0, 0, cursor.w, cursor.h);
             } else {
-                surface.damage(0, 0, cursor.w / scale, cursor.h / scale);
+                let size = PhysicalSize::new(cursor.w, cursor.h).to_logical(scale);
+                surface.damage(0, 0, size.width, size.height);
             }
             surface.commit();
 
@@ -746,12 +755,9 @@ impl WindowState {
                 .and_then(|data| data.pointer_data().latest_enter_serial())
                 .unwrap();
 
-            pointer.pointer().set_cursor(
-                serial,
-                Some(surface),
-                cursor.hotspot_x / scale,
-                cursor.hotspot_y / scale,
-            );
+            let hotspot =
+                PhysicalPosition::new(cursor.hotspot_x, cursor.hotspot_y).to_logical(scale);
+            pointer.pointer().set_cursor(serial, Some(surface), hotspot.x, hotspot.y);
         });
     }
 
@@ -827,32 +833,49 @@ impl WindowState {
             None => return Err(ExternalError::NotSupported(NotSupportedError::new())),
         };
 
-        // Replace the current mode.
-        let old_mode = std::mem::replace(&mut self.cursor_grab_mode.current_grab_mode, mode);
-
-        match old_mode {
-            CursorGrabMode::None => (),
+        let mut unset_old = false;
+        match self.cursor_grab_mode.current_grab_mode {
+            CursorGrabMode::None => unset_old = true,
             CursorGrabMode::Confined => self.apply_on_pointer(|_, data| {
                 data.unconfine_pointer();
+                unset_old = true;
             }),
             CursorGrabMode::Locked => {
-                self.apply_on_pointer(|_, data| data.unlock_pointer());
+                self.apply_on_pointer(|_, data| {
+                    data.unlock_pointer();
+                    unset_old = true;
+                });
             },
         }
 
+        // In case we haven't unset the old mode, it means that we don't have a cursor above
+        // the window, thus just wait for it to re-appear.
+        if !unset_old {
+            return Ok(());
+        }
+
+        let mut set_mode = false;
         let surface = self.window.wl_surface();
         match mode {
             CursorGrabMode::Locked => self.apply_on_pointer(|pointer, data| {
                 let pointer = pointer.pointer();
-                data.lock_pointer(pointer_constraints, surface, pointer, &self.queue_handle)
+                data.lock_pointer(pointer_constraints, surface, pointer, &self.queue_handle);
+                set_mode = true;
             }),
             CursorGrabMode::Confined => self.apply_on_pointer(|pointer, data| {
                 let pointer = pointer.pointer();
-                data.confine_pointer(pointer_constraints, surface, pointer, &self.queue_handle)
+                data.confine_pointer(pointer_constraints, surface, pointer, &self.queue_handle);
+                set_mode = true;
             }),
             CursorGrabMode::None => {
                 // Current lock/confine was already removed.
+                set_mode = true;
             },
+        }
+
+        // Replace the current grab mode after we've ensure that it got updated.
+        if set_mode {
+            self.cursor_grab_mode.current_grab_mode = mode;
         }
 
         Ok(())
