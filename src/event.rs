@@ -103,9 +103,6 @@ pub enum Event<T: 'static> {
     ///
     /// [`ApplicationHandler::memory_warning`]: crate::application::ApplicationHandler::memory_warning
     MemoryWarning,
-
-    /// Open file at the given path.
-    OpenFile(PathBuf),
 }
 
 impl<T> Event<T> {
@@ -122,7 +119,6 @@ impl<T> Event<T> {
             Suspended => Ok(Suspended),
             Resumed => Ok(Resumed),
             MemoryWarning => Ok(MemoryWarning),
-            OpenFile(file) => Ok(OpenFile(file)),
         }
     }
 }
